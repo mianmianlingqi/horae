@@ -1,3 +1,4 @@
+use super::AppRender;
 use crate::tui::app::voice::VOICE_MAX_SECS;
 use crate::tui::app::{App, Mode, View};
 use crate::tui::icons::Icon;
@@ -48,6 +49,13 @@ impl<'a> App<'a> {
 
     /// 输入/编辑模式的弹层：标题 + 文本行（快速录入带实时解析预览）。
     pub(super) fn render_input_overlay(&mut self, f: &mut Frame, size: Rect) {
+        self.hit_map.modal();
+        if self.show_syntax {
+            let (_, syntax_area) = self.capture_layout_geometry(size);
+            if let Some(area) = syntax_area {
+                self.render_syntax_drawer(f, area);
+            }
+        }
         let title_recording_holder;
         let title = match self.mode {
             Mode::Search => {
@@ -287,6 +295,32 @@ impl<'a> App<'a> {
             area,
         );
 
+        // Buttons share the existing Enter/Esc handlers, including validation.
+        // Place them on the border so preview rows retain their original height.
+        if area.height >= 2 {
+            let mut x = area.x.saturating_add(2);
+            for (label, code) in [
+                (
+                    tr!(self.lang, "[确认]", "[Confirm]"),
+                    crossterm::event::KeyCode::Enter,
+                ),
+                (
+                    tr!(self.lang, "[取消]", "[Cancel]"),
+                    crossterm::event::KeyCode::Esc,
+                ),
+            ] {
+                let line = Line::from(Span::styled(label, Style::default().fg(self.theme.accent)));
+                let width = line.width() as u16;
+                if x.saturating_add(width) <= area.right().saturating_sub(1) {
+                    let button = Rect::new(x, area.bottom().saturating_sub(1), width, 1);
+                    f.render_widget(Paragraph::new(line), button);
+                    self.hit_map
+                        .push(button, crate::tui::mouse::HitTarget::Key(code));
+                }
+                x = x.saturating_add(width).saturating_add(1);
+            }
+        }
+
         // 补全候选下拉层：独立渲染在输入框下方或上方（自适应翻转），不抬高输入框本身。
         if self.completion_active() {
             self.render_completion_dropdown(f, area);
@@ -295,7 +329,9 @@ impl<'a> App<'a> {
         // 真实终端插入光标：定位到输入行，框内第一列 = area.x + 1(边框) + 1(内边距)。
         let cursor_x = area.x + 2 + (cursor_col.saturating_sub(scroll_x as usize)) as u16;
         let cursor_y = area.y + 1;
-        f.set_cursor_position((cursor_x, cursor_y));
+        if area.width > 4 && area.height > 2 {
+            f.set_cursor_position((cursor_x.min(area.right() - 2), cursor_y));
+        }
     }
 
     /// 补全候选下拉层：自适应输入框下方/上方渲染，支持视口保护与滚动窗口。
@@ -456,6 +492,17 @@ impl<'a> App<'a> {
             .padding(ratatui::widgets::Padding::horizontal(1))
             .border_style(Style::default().fg(self.theme.accent))
             .title(block_title);
+        let inner = block.inner(dd).intersection(f.area());
+        self.hit_map
+            .push_scroll(inner, crate::tui::mouse::ScrollArea::Completion, total - 1);
+        for (row, index) in (scroll_start..scroll_end).enumerate() {
+            if row < inner.height as usize {
+                self.hit_map.push(
+                    Rect::new(inner.x, inner.y + row as u16, inner.width, 1),
+                    crate::tui::mouse::HitTarget::Completion(index),
+                );
+            }
+        }
         f.render_widget(Paragraph::new(lines).block(block), dd);
     }
 
@@ -667,7 +714,10 @@ impl<'a> App<'a> {
                 width: w,
                 height: syntax_h,
             };
-            (input_area, Some(syntax_area))
+            (
+                input_area.intersection(size),
+                Some(syntax_area.intersection(size)),
+            )
         } else {
             let top_offset = if self.is_zen_capturing() {
                 (size.height * 20 / 100).max(2)
@@ -681,7 +731,7 @@ impl<'a> App<'a> {
                 width: w,
                 height: input_h,
             };
-            (input_area, None)
+            (input_area.intersection(size), None)
         }
     }
 }

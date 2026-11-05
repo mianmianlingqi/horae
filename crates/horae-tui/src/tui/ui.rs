@@ -96,7 +96,21 @@ fn append_progress_spans(
     }
 }
 
-pub(crate) fn build_list_items(app: &App) -> Vec<ListItem<'static>> {
+/// 列表行：渲染用的 [`ListItem`] 与鼠标命中所需的几何信息。
+///
+/// 行高由 `ListItem::height()`（多行行的真实高度）决定；完成标记列宽用
+/// ratatui 的 unicode 宽度计算（`Line::width` 同源），中文/emoji 宽字符按 2 列计。
+#[derive(Debug)]
+pub(crate) struct ListRow {
+    pub(crate) item: ListItem<'static>,
+    /// 完成标记本身的显示宽度，不包含缩进、选择前缀或标题。
+    pub(crate) marker_width: u16,
+    pub(crate) marker_start: u16,
+    /// 稳定任务 id（Tags/Settings 视图为伪行 id），用于命中反查，避免下标错位。
+    pub(crate) task_id: String,
+}
+
+pub(crate) fn build_list_items(app: &App, max_height: usize) -> Vec<ListRow> {
     let active_pomo_task_id = if app.pomo.phase != horae_core::model::pomodoro::Phase::Idle {
         app.pomo.task_id.clone()
     } else {
@@ -285,12 +299,35 @@ pub(crate) fn build_list_items(app: &App) -> Vec<ListItem<'static>> {
                 ));
             }
 
-            let line = Line::from(spans);
-            let mut item = ListItem::new(line);
+            let marker_start = Span::raw(format!("{}{}", sel_prefix, indent)).width() as u16;
+            let marker_width = Span::raw(letter).width() as u16;
+            // Explicit line breaks belong to the same task. Preserve span styling
+            // while letting List calculate its real multi-line height.
+            let mut lines = Vec::new();
+            let mut line = Line::default();
+            for span in spans {
+                for (index, part) in span.content.split('\n').enumerate() {
+                    if index > 0 {
+                        lines.push(line);
+                        line = Line::default();
+                    }
+                    line.spans.push(Span::styled(part.to_owned(), span.style));
+                }
+            }
+            lines.push(line);
+            // Keep a clickable preview for items taller than the viewport.
+            // The full task title remains available in the detail panel.
+            lines.truncate(max_height.max(1));
+            let mut item = ListItem::new(ratatui::text::Text::from(lines));
             if is_selected {
                 item = item.style(Style::default().bg(app.theme.hl_bg));
             }
-            item
+            ListRow {
+                item,
+                marker_width,
+                marker_start,
+                task_id: r.id.clone(),
+            }
         })
         .collect()
 }

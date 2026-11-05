@@ -2739,12 +2739,17 @@ fn module_toggle_popup_navigates_and_persists() {
     let reloaded = horae_core::repo::modules::ModuleVisibility::load(app.conn);
     assert!(!reloaded.splash);
 
-    // j 向下循环导航（0 → 1），k 反向且在 0 处回绕到 15（最后一项：密码保护模式）
+    // j 向下循环导航（0 → 1），k 在 0 处回绕到最后一项。
     app.handle_key(key('j')).unwrap();
     assert_eq!(app.popup, Some(crate::tui::app::Popup::ModuleToggles(1)));
     app.popup = Some(crate::tui::app::Popup::ModuleToggles(0));
     app.handle_key(key('k')).unwrap();
-    assert_eq!(app.popup, Some(crate::tui::app::Popup::ModuleToggles(15)));
+    assert_eq!(
+        app.popup,
+        Some(crate::tui::app::Popup::ModuleToggles(
+            super::handlers::MODULE_OPTION_COUNT - 1
+        ))
+    );
 
     // Esc 关闭弹层
     app.handle_key(kc(KeyCode::Esc)).unwrap();
@@ -3987,7 +3992,7 @@ fn micro_progress_bar_renders_in_list_items() {
     app.set_view(View::Next);
     app.refresh().unwrap();
 
-    let list_items = crate::tui::ui::build_list_items(&app);
+    let list_items = crate::tui::ui::build_list_items(&app, usize::MAX);
     assert_eq!(list_items.len(), 1);
     // 检查清单进度包含 1/2
     let item_str = format!("{:?}", list_items[0]);

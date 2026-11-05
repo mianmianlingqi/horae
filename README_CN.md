@@ -1,11 +1,15 @@
 # horae — GTD 终端任务管理器
 
+这是 [mianmianlingqi/horae](https://github.com/mianmianlingqi/horae) 维护的鼠标交互增强分叉，基于 [zhaohang1205/horae](https://github.com/zhaohang1205/horae)，保留上游 GPL-3.0 许可证和提交历史。
+
+**下载本分叉版本：**[v0.2.6-mouse.1 发布页](https://github.com/mianmianlingqi/horae/releases/tag/v0.2.6-mouse.1)。Windows x64 用户解压 ZIP 后，在 Windows Terminal 中运行 `horae.exe`，程序会继续使用 `%APPDATA%\horae` 中的现有数据。下文的 npm 和 crates.io 安装方式对应上游版本；使用本次鼠标增强功能，请下载本分叉的发布包或编译本仓库源码。
+
 > **脑子里冒出一个想法，10 秒内进收件箱。Rust 编写。**  
 > 亚秒级启动 · 输入时响应式提示 · 一句话语法 · 完整 GTD · 无账号
 
 <p>
-  <a href="https://github.com/zhaohang1205/horae/actions/workflows/ci.yml"><img src="https://github.com/zhaohang1205/horae/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/zhaohang1205/horae/actions/workflows/release.yml"><img src="https://github.com/zhaohang1205/horae/actions/workflows/release.yml/badge.svg" alt="Release"></a>
+  <a href="https://github.com/mianmianlingqi/horae/actions/workflows/ci.yml"><img src="https://github.com/mianmianlingqi/horae/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/mianmianlingqi/horae/actions/workflows/release.yml"><img src="https://github.com/mianmianlingqi/horae/actions/workflows/release.yml/badge.svg" alt="Release"></a>
   <a href="https://crates.io/crates/horae"><img src="https://img.shields.io/crates/v/horae.svg" alt="Crates.io"></a>
   <a href="https://crates.io/crates/horae"><img src="https://img.shields.io/crates/d/horae.svg" alt="下载量"></a>
   <a href="https://www.npmjs.com/package/horae-cli"><img src="https://img.shields.io/npm/v/horae-cli.svg" alt="npm"></a>
@@ -343,6 +347,39 @@ CLI `capture`、`modify`、TUI 输入条、手机同步文件与飞书消息共�
 标签视图里 `c` 新建标签、`D` 删除标签；设置页里 `n` 新建、`r` 重命名、`d` 删除、`s` 设为默认 Profile、`b` 开关提示音效、`p` 配置密码保护。
 
 今日与明日视图的口径是刻意收紧的：两者都只收录 `Next` 与 `Scheduled` 状态的任务；今日 = 逾期任务 ∪ 窗口落在今天的排程，明日只含窗口落在明天的任务，今天没做完的事不会结转到明天。
+
+### 鼠标
+
+鼠标默认开启，任务操作和弹窗按钮复用现有业务逻辑。所有键盘快捷键保持可用。
+
+| 操作 | 效果 |
+| --- | --- |
+| 左键单击任务行 | 选中该行并加载右侧详情 |
+| 左键单击行首状态标记，如 `.`、`>`、`#`、`x` | 完成该任务，或把已完成任务恢复为下一步；循环任务按原有规则推进到下次排程 |
+| 左键单击左侧引导栏的视图 | 切换到该视图并把焦点交给左栏 |
+| 滚轮停在引导栏、列表、详情、帮助、语法速查或工作流上 | 只滚动光标所在的那一栏 |
+| 滚轮停在任务列表上 | 按滚轮步长移动选中项 |
+| 左键单击弹窗内部 | 弹窗独占指针，只有它自己的选项行与按钮响应 |
+
+弹窗对鼠标是模态的：弹窗一出现就清空底层的全部命中区域，误点不会落到被遮住的任务上。弹窗里每个选项行、每个 `确认` / `取消`（或 `Space` / `Enter` / `Esc`）按钮都按真实渲染矩形登记（中文宽字符按显示列宽计算，不按字符个数），因此点批量归档里的 `确认` 等价于按 `Enter`，点 `F7` 面板里的某一行等价于在该行按 `Space`。终端太矮时 `F7` 面板可滚（滚轮或 `j`/`k`），标题会显示「第几项/共几项」。
+
+鼠标相关设置都在 `F7` 里，并随数据库持久化：
+
+| 设置 | 默认 | 效果 |
+| --- | --- | --- |
+| 鼠标交互 | 开 | `mouse_enabled=1`；设为 `0` 关闭鼠标捕获，恢复终端原生文本选择 |
+| 滚轮步长 | 3 | `mouse_scroll_step`，每格滚轮移动的行数，夹紧 1–100；在该行按 `←`/`→`（或 `h`/`l`）与 `Space` 可在 1/2/3/5/10/20 之间循环 |
+
+两者都是 `settings` 表里的普通键，旧数据库照常工作：没有 `mouse_enabled` 视为开启，没有 `mouse_scroll_step` 视为 3。
+
+手动验证步骤：
+
+1. 启动 `horae`，单击任意任务行，确认高亮和右侧详情跟随；再点击行首状态标记，确认普通任务完成、循环任务推进排程。按 `u` 验证原有撤销功能。
+2. 点击左侧引导栏的视图，再分别将鼠标移到引导栏、任务列表和右侧详情上滚动滚轮，确认各栏独立滚动。列表滚轮会移动选中项。缩放窗口、筛选任务后再次点击，检查任务对应关系。
+3. 按 `F7` 后点击选项，确认该项切换且弹窗保持打开；点击 `[Enter/Esc] 关闭`。在较矮窗口中用滚轮或 `j`、`k` 浏览设置。点击弹窗外部，确认底层任务不受影响。
+4. 对某任务按 `A`，先点击确认弹层的取消按钮，再次打开后点击确认按钮，检查取消和归档行为。
+5. 打开 `F7` 的鼠标交互选项，按 `Space` 关闭，确认点击失效且终端原生文本选择恢复；用键盘重新开启后检查点击。
+6. 在 `F7` 中调整滚轮步长，重启后确认数值保留。按 `a` 输入任务后点击确认或取消，打开帮助后检查滚轮和关闭操作；退出程序后检查终端光标与文本选择恢复。
 
 ## 专注推荐
 

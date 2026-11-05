@@ -295,6 +295,20 @@ pub(crate) struct App<'a> {
     pub(crate) syntax_scroll: usize,
     pub(crate) show_shortcut_bar: bool,
     pub(crate) help_scroll: usize,
+    /// 左侧引导栏滚动偏移（鼠标滚轮，独立于列表/详情）。
+    pub(crate) guide_scroll: usize,
+    /// 右侧任务详情滚动偏移（鼠标滚轮，独立于列表/引导栏）。
+    pub(crate) detail_scroll: usize,
+    /// 弹窗内容滚动偏移（由弹窗渲染方接入 `HitTarget::Scroll`）。
+    pub(crate) popup_scroll: usize,
+    /// 鼠标交互总开关（settings 键 `mouse_enabled`，旧配置缺省开启）。
+    pub(crate) mouse_enabled: bool,
+    /// 鼠标滚轮行步长（settings 键 `mouse_scroll_step`，缺省 3，夹紧 1..=100）。
+    pub(crate) mouse_scroll_step: usize,
+    /// 左键按下未释放：防同一次按下期间的重复 Down 重复触发动作。
+    pub(crate) mouse_down: bool,
+    /// 当帧渲染期建立的真实矩形命中映射（每帧重建）。
+    pub(crate) hit_map: crate::tui::mouse::HitMap,
     /// GTD 工作流视图（中心决策树）滚动偏移。
     pub(crate) workflow_scroll: usize,
     /// GTD 工作流视图（右侧哲学与人物）滚动偏移。
@@ -463,6 +477,20 @@ impl<'a> App<'a> {
             settings_map.get("sound_enabled").map(|s| s.as_str()),
             Some("0")
         );
+        // 鼠标交互：旧配置没有该键时缺省开启（`mouse` 为兼容别名）。
+        let mouse_enabled = !matches!(
+            settings_map
+                .get("mouse_enabled")
+                .or_else(|| settings_map.get("mouse"))
+                .map(|s| s.as_str()),
+            Some("0")
+        );
+        // 滚轮步长：缺省 3 行，非法/越界值夹紧到 1..=100。
+        let mouse_scroll_step = settings_map
+            .get("mouse_scroll_step")
+            .and_then(|s| s.trim().parse::<usize>().ok())
+            .unwrap_or(3)
+            .clamp(1, 100);
         // 农历卡片由 [`App::refresh`] 统一计算（构造末尾必跑一次），此处不重复算。
         let mut app = App {
             conn,
@@ -490,6 +518,13 @@ impl<'a> App<'a> {
             syntax_scroll: 0,
             show_shortcut_bar: true,
             help_scroll: 0,
+            guide_scroll: 0,
+            detail_scroll: 0,
+            popup_scroll: 0,
+            mouse_enabled,
+            mouse_scroll_step,
+            mouse_down: false,
+            hit_map: crate::tui::mouse::HitMap::new(),
             workflow_scroll: 0,
             workflow_side_scroll: 0,
             should_quit: false,
@@ -788,6 +823,8 @@ impl<'a> App<'a> {
     pub(crate) fn set_view(&mut self, v: View) {
         self.view = v;
         self.selected = 0;
+        self.guide_scroll = 0;
+        self.detail_scroll = 0;
         self.workflow_scroll = 0;
         self.workflow_side_scroll = 0;
         self.toast = None;

@@ -1,17 +1,17 @@
 [package]
 name = "horae-tui"
-version = "0.2.5"
+version = "0.2.6-mouse.1"
 edition = "2021"
 rust-version = "1.89"
 license = "GPL-3.0"
 description = "Ratatui TUI frontend for the horae GTD task manager. Keyboard-driven, Catppuccin theme, bilingual (EN/ZH). Written in Rust."
-repository = "https://github.com/zhaohang1205/horae"
+repository = "https://github.com/mianmianlingqi/horae"
 keywords = ["tui", "ratatui", "gtd", "productivity", "task-manager"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-horae-core = { path = "../horae-core", version = "0.2.5" }
-ratatui = { version = "0.30", default-features = false, features = ["crossterm", "layout-cache", "underline-color"] }
+horae-core = { path = "../horae-core", version = "0.2.6-mouse.1" }
+ratatui = { version = "0.30", default-features = false, features = ["crossterm", "layout-cache", "underline-color", "unstable-rendered-line-info"] }
 crossterm = "0.29"
 unicode-width = "0.2"
 anyhow = "1"
@@ -21,5 +21,5 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 libc = "0.2"
 
 [dev-dependencies]
-horae-core = { path = "../horae-core", version = "0.2.5", features = ["test-util"] }
+horae-core = { path = "../horae-core", version = "0.2.6-mouse.1", features = ["test-util"] }
 tempfile = "3.27"

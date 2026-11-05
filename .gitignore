@@ -1,4 +1,10 @@
 /target
 Cargo.lock.bak
-
-
+/dist/
+/plans/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+.env
+.env.*

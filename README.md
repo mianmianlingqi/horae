@@ -1,11 +1,15 @@
 # horae
 
+This is the mouse interaction fork maintained at [mianmianlingqi/horae](https://github.com/mianmianlingqi/horae), based on [zhaohang1205/horae](https://github.com/zhaohang1205/horae). It retains the upstream GPL-3.0 license and history.
+
+**Download this fork:** [v0.2.6-mouse.1 release](https://github.com/mianmianlingqi/horae/releases/tag/v0.2.6-mouse.1). For Windows x64, extract the ZIP and run `horae.exe` in Windows Terminal. Existing data under `%APPDATA%\horae` is reused. Upstream npm/crates.io installers below install the upstream version; use this fork's release or build its source for the mouse enhancements.
+
 > **Idea → captured in under 10 seconds. Written in Rust.**  
 > Sub-second startup · reactive completions as you type · one-line syntax · full GTD · no account
 
 <p>
-  <a href="https://github.com/zhaohang1205/horae/actions/workflows/ci.yml"><img src="https://github.com/zhaohang1205/horae/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/zhaohang1205/horae/actions/workflows/release.yml"><img src="https://github.com/zhaohang1205/horae/actions/workflows/release.yml/badge.svg" alt="Release"></a>
+  <a href="https://github.com/mianmianlingqi/horae/actions/workflows/ci.yml"><img src="https://github.com/mianmianlingqi/horae/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/mianmianlingqi/horae/actions/workflows/release.yml"><img src="https://github.com/mianmianlingqi/horae/actions/workflows/release.yml/badge.svg" alt="Release"></a>
   <a href="https://crates.io/crates/horae"><img src="https://img.shields.io/crates/v/horae.svg" alt="Crates.io"></a>
   <a href="https://crates.io/crates/horae"><img src="https://img.shields.io/crates/d/horae.svg" alt="Downloads"></a>
   <a href="https://www.npmjs.com/package/horae-cli"><img src="https://img.shields.io/npm/v/horae-cli.svg" alt="npm"></a>
@@ -343,6 +347,39 @@ Running `horae` opens a three-pane layout: navigation on the left, the task list
 In the Tags view, `c` creates a tag and `D` deletes one. In the Settings view, `n` creates a profile, `r` renames, `d` deletes, `s` sets the default, `b` toggles sound effects, and `p` configures password protection.
 
 Today and Tomorrow are deliberately strict: both only contain `Next` and `Scheduled` tasks. Today is the union of overdue tasks and tasks whose window falls inside today; Tomorrow contains only tasks scheduled inside tomorrow's window, with no carry-over of unfinished work.
+
+### Mouse
+
+Mouse support is on by default. Task actions and popup buttons reuse existing business logic, and all keyboard shortcuts remain available.
+
+| Action | Effect |
+| --- | --- |
+| Left-click a task row | select it and load its detail |
+| Left-click the leading status marker, such as `.`, `>`, `#`, or `x` | complete the task or restore a done task to Next; recurring tasks advance their schedule as before |
+| Left-click a view in the left sidebar | switch to that view and focus the sidebar |
+| Wheel over the sidebar, list, detail, help, syntax or workflow | scroll only the pane under the pointer |
+| Wheel over the task list | move the selection by the scroll step |
+| Left-click inside a popup | the popup owns the pointer; only its own rows and buttons react |
+
+Popups are modal for the mouse: opening one drops every underlying hit target, so a stray click cannot reach a hidden task. Inside a popup each option row and each `Confirm` / `Cancel` (or `Space` / `Enter` / `Esc`) button is registered at its real rendered rectangle — Chinese double-width text included, using display columns rather than character counts. Clicking `Confirm` in a bulk-archive prompt is exactly `Enter`; clicking a row of the `F7` panel is exactly `Space` on that row. When the terminal is too short for the `F7` panel the list scrolls (wheel or `j`/`k`) and the title shows `position/total`.
+
+Mouse settings live under `F7` and are persisted per database:
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Mouse interaction | on | `mouse_enabled=1`; set `0` to stop capturing the mouse and get the terminal's native text selection back |
+| Scroll step | 3 | `mouse_scroll_step`, wheel rows per notch, clamped to 1–100; `←`/`→` (or `h`/`l`) and `Space` on the row cycle 1/2/3/5/10/20 |
+
+Both are ordinary rows in the `settings` table, so an existing database keeps working: a missing `mouse_enabled` means on, a missing `mouse_scroll_step` means 3.
+
+Manual verification:
+
+1. Start `horae`, click a task row and check its highlight and details. Click the status marker to complete a normal task or advance a recurring task. Press `u` to verify existing undo behavior.
+2. Click sidebar views, then wheel over the sidebar, list and details independently. The list wheel moves the selection. Resize and filter the list, then check task identity when clicking again.
+3. Press `F7`, click an option and check that it changes while the popup stays open. Click `[Enter/Esc] close`. Use the wheel or `j`/`k` in a short window. Click outside a popup and verify that underlying tasks are unaffected.
+4. Press `A` on a task, cancel in the confirmation overlay, then reopen it and confirm. Check both cancellation and archive behavior.
+5. Turn off Mouse interaction in `F7` with `Space`, verify that clicks stop and native text selection returns, then re-enable it with the keyboard and check clicking again.
+6. Change the scroll step in `F7` and restart to verify persistence. Press `a`, enter a task and click Confirm or Cancel. Check help scrolling and closing, then exit and verify terminal cursor and text selection restoration.
 
 ## Focus recommendation
 

@@ -62,8 +62,9 @@ jobs:
           ASSET="horae-${REF}-${TARGET}.tar.gz"
           mkdir -p dist
           cp "target/${TARGET}/release/horae" dist/horae
-          tar czf "dist/${ASSET}" -C dist horae
-          rm dist/horae
+          cp LICENSE README.md README_CN.md RELEASE_NOTES.md dist/
+          tar czf "dist/${ASSET}" -C dist horae LICENSE README.md README_CN.md RELEASE_NOTES.md
+          rm dist/horae dist/LICENSE dist/README.md dist/README_CN.md dist/RELEASE_NOTES.md
           (
             cd dist
             sha256sum "${ASSET}" > "${ASSET}.sha256"
@@ -79,8 +80,9 @@ jobs:
           $asset = "horae-$env:REF-$env:TARGET.zip"
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item "target/$env:TARGET/release/horae.exe" dist/horae.exe
-          Compress-Archive -Path dist/horae.exe -DestinationPath "dist/$asset" -Force
-          Remove-Item dist/horae.exe
+          Copy-Item -LiteralPath LICENSE,README.md,README_CN.md,RELEASE_NOTES.md -Destination dist
+          Compress-Archive -Path dist/horae.exe,dist/LICENSE,dist/README.md,dist/README_CN.md,dist/RELEASE_NOTES.md -DestinationPath "dist/$asset" -Force
+          Remove-Item -LiteralPath dist/horae.exe,dist/LICENSE,dist/README.md,dist/README_CN.md,dist/RELEASE_NOTES.md
           $hash = (Get-FileHash -Algorithm SHA256 "dist/$asset").Hash.ToLower()
           "$hash  $asset" | Out-File -Encoding ascii "dist/$asset.sha256"
 
@@ -108,3 +110,4 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

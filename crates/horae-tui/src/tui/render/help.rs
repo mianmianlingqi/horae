@@ -7,6 +7,16 @@ use ratatui::{
     text::{Line, Span},
 };
 
+/// 左侧引导栏的渲染内容与可点击行映射。
+///
+/// `view_rows` 在生成行的同时记录，鼠标命中只查映射、不解析渲染文本，
+/// 因此中英文/图标风格/滚动偏移都不会影响点击语义。
+pub(super) struct GuideContent {
+    pub lines: Vec<Line<'static>>,
+    /// `(lines 下标, View)`：该行是某个视图的导航行。
+    pub view_rows: Vec<(usize, View)>,
+}
+
 impl<'a> App<'a> {
     /// 语法说明面板的行内容。
     pub(super) fn syntax_lines(&self) -> Vec<Line<'static>> {
@@ -349,8 +359,9 @@ impl<'a> App<'a> {
     }
 
     /// 左侧引导栏内容：视图分组 + 动态快捷键（按剩余行数截断）。
-    pub(super) fn guide_lines(&self, area: Rect) -> Vec<Line<'static>> {
+    pub(super) fn guide_content(&self, area: Rect) -> GuideContent {
         let mut lines: Vec<Line> = Vec::new();
+        let mut view_rows: Vec<(usize, View)> = Vec::new();
 
         if self.total_count() == 0 {
             lines.push(Line::from(Span::styled(
@@ -438,6 +449,7 @@ impl<'a> App<'a> {
                 };
                 let padded_label = pad_right(label, 10);
 
+                let row = lines.len();
                 if active {
                     let mut style = Style::default()
                         .fg(self.theme.accent)
@@ -469,6 +481,7 @@ impl<'a> App<'a> {
                         Span::raw(format!("{} {:>3} ", padded_label, cnt)),
                     ]));
                 }
+                view_rows.push((row, *v));
             }
             if spacious {
                 lines.push(Line::from(""));
@@ -566,6 +579,7 @@ impl<'a> App<'a> {
                 "    ".to_string()
             };
 
+            let row = lines.len();
             if active {
                 let mut style = Style::default()
                     .fg(self.theme.accent)
@@ -597,6 +611,7 @@ impl<'a> App<'a> {
                     Span::raw(format!("{} {}", padded_label, cnt_str)),
                 ]));
             }
+            view_rows.push((row, v));
         }
         if spacious {
             lines.push(Line::from(""));
@@ -638,6 +653,6 @@ impl<'a> App<'a> {
             }
         }
 
-        lines
+        GuideContent { lines, view_rows }
     }
 }

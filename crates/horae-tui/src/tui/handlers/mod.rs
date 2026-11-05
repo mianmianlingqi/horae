@@ -17,6 +17,17 @@ use horae_core::repo::tasks;
 fn short_id(id: &str) -> String {
     id.chars().take(8).collect()
 }
+
+/// F7「模块显示设置」弹窗的选项总数。
+/// 新增选项时必须同步 `render/popups.rs` 的渲染顺序与相关测试。
+pub(crate) const MODULE_OPTION_COUNT: usize = 18;
+/// 鼠标交互开关的下标：追加在旧选项之后，保证既有下标稳定。
+pub(crate) const MODULE_OPTION_MOUSE: usize = 16;
+/// 滚轮步长的下标。
+pub(crate) const MODULE_OPTION_SCROLL_STEP: usize = 17;
+/// 滚轮步长可选值：Space / ←/→ / h/l 在其间循环。
+pub(crate) const MOUSE_SCROLL_STEPS: [usize; 6] = [1, 2, 3, 5, 10, 20];
+
 pub(crate) trait AppHandlers {
     fn handle_key(&mut self, key: KeyEvent) -> Result<()>;
     fn handle_paste(&mut self, text: String);
@@ -55,11 +66,20 @@ impl<'a> AppHandlers for App<'a> {
                             // close, implicitly handled because popup is taken and not put back
                         }
                         KeyCode::Char('j') | KeyCode::Down => {
-                            idx = (idx + 1) % 16;
+                            idx = (idx + 1) % MODULE_OPTION_COUNT;
                             self.popup = Some(crate::tui::app::Popup::ModuleToggles(idx));
                         }
                         KeyCode::Char('k') | KeyCode::Up => {
-                            idx = idx.checked_sub(1).unwrap_or(15);
+                            idx = idx.checked_sub(1).unwrap_or(MODULE_OPTION_COUNT - 1);
+                            self.popup = Some(crate::tui::app::Popup::ModuleToggles(idx));
+                        }
+                        // 滚轮步长支持 ←/→（及 h/l）微调，与 Space 复用同一循环逻辑。
+                        KeyCode::Left | KeyCode::Char('h') if idx == MODULE_OPTION_SCROLL_STEP => {
+                            self.cycle_mouse_scroll_step(-1);
+                            self.popup = Some(crate::tui::app::Popup::ModuleToggles(idx));
+                        }
+                        KeyCode::Right | KeyCode::Char('l') if idx == MODULE_OPTION_SCROLL_STEP => {
+                            self.cycle_mouse_scroll_step(1);
                             self.popup = Some(crate::tui::app::Popup::ModuleToggles(idx));
                         }
                         KeyCode::Char(' ') => {
@@ -229,6 +249,19 @@ impl<'a> AppHandlers for App<'a> {
                                             });
                                         return Ok(());
                                     }
+                                }
+                                MODULE_OPTION_MOUSE => {
+                                    // 鼠标交互开关：缺省开启，落库后由事件循环热启/停用捕获。
+                                    self.mouse_enabled = !self.mouse_enabled;
+                                    self.mouse_down = false;
+                                    self.save_setting(
+                                        "mouse_enabled",
+                                        if self.mouse_enabled { "1" } else { "0" },
+                                    );
+                                }
+                                MODULE_OPTION_SCROLL_STEP => {
+                                    // 滚轮步长：Space 与 ←/→ 复用同一套预设循环。
+                                    self.cycle_mouse_scroll_step(1);
                                 }
                                 _ => {}
                             }
@@ -732,6 +765,19 @@ impl<'a> App<'a> {
             _ => {}
         }
         Ok(())
+    }
+
+    /// 在预设步长之间循环（`delta` 为 ±1 方向）并持久化到 settings 表。
+    /// Space（+1）与 ←/→、h/l（±1）共用这一处逻辑。
+    pub(super) fn cycle_mouse_scroll_step(&mut self, delta: isize) {
+        let steps = MOUSE_SCROLL_STEPS;
+        let pos = steps
+            .iter()
+            .position(|s| *s == self.mouse_scroll_step)
+            .unwrap_or(2) as isize;
+        let next = (pos + delta).rem_euclid(steps.len() as isize) as usize;
+        self.mouse_scroll_step = steps[next];
+        self.save_setting("mouse_scroll_step", &self.mouse_scroll_step.to_string());
     }
 
     fn handle_password_set_key(

@@ -1,11 +1,11 @@
 [package]
 name = "horae-core"
-version = "0.2.5"
+version = "0.2.6-mouse.1"
 edition = "2021"
 rust-version = "1.89"
 license = "GPL-3.0"
 description = "Core library for the horae GTD task manager: SQLite data layer, scheduling engine, recurrence rules (RRULE), and time parsing. Written in Rust."
-repository = "https://github.com/zhaohang1205/horae"
+repository = "https://github.com/mianmianlingqi/horae"
 keywords = ["gtd", "productivity", "sqlite", "scheduling", "task-manager"]
 categories = ["command-line-utilities", "database"]
 

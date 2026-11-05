@@ -2,12 +2,15 @@ pub mod app;
 pub mod handlers;
 pub mod icons;
 pub mod keys;
+pub(crate) mod mouse;
 pub mod render;
 pub mod theme;
 pub mod ui;
 
 pub use app::LaunchMode;
-pub(crate) use app::{App, Pane, View};
+#[cfg(test)]
+use app::Pane;
+pub(crate) use app::{App, View};
 pub(crate) use handlers::AppHandlers;
 pub(crate) use render::AppRender;
 
@@ -24,6 +27,41 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use rusqlite::Connection;
 use std::io::{self, Stdout, Write};
 use std::time::Duration;
+
+/// Covers partial initialization, normal errors, unwinding and release panic=abort.
+/// The panic hook runs before abort, where Drop cannot run.
+struct TerminalGuard;
+
+fn restore_terminal() {
+    let _ = disable_raw_mode();
+    let _ = execute!(
+        io::stdout(),
+        crossterm::event::DisableMouseCapture,
+        crossterm::event::DisableBracketedPaste,
+        LeaveAlternateScreen,
+        crossterm::cursor::Show
+    );
+}
+
+impl TerminalGuard {
+    fn new() -> Self {
+        static HOOK: std::sync::Once = std::sync::Once::new();
+        HOOK.call_once(|| {
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                restore_terminal();
+                previous(info);
+            }));
+        });
+        Self
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        restore_terminal();
+    }
+}
 
 /// 状态的中文含义，用于引导栏的“状态地图”。按当前语言返回。
 pub(crate) fn status_cn(lang: horae_core::i18n::Lang, s: task::Status) -> &'static str {
@@ -119,6 +157,7 @@ pub fn run_with_mode(
     profile: Option<&str>,
     launch_mode: LaunchMode,
 ) -> Result<()> {
+    let _terminal_guard = TerminalGuard::new();
     // TUI 全程不显示终端硬件光标（仅输入态由 ratatui 自行在帧内显示）：
     // 在任何初始化之前先隐藏，避免启动期（建 App、开屏退出到首帧这段时间）
     // 出现「光标闪一下又消失」的现象；退出时再统一恢复。
@@ -153,10 +192,12 @@ pub fn run_with_mode(
     execute!(
         stdout,
         EnterAlternateScreen,
-        crossterm::event::EnableMouseCapture,
         crossterm::event::EnableBracketedPaste,
         crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
     )?;
+    if app.mouse_enabled {
+        execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    }
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -181,8 +222,17 @@ fn run_app(
 ) -> Result<()> {
     let mut dirty = true;
     let mut last_draw = std::time::Instant::now();
+    let mut mouse_captured = app.mouse_enabled;
 
     loop {
+        if mouse_captured != app.mouse_enabled {
+            if app.mouse_enabled {
+                execute!(terminal.backend_mut(), event::EnableMouseCapture)?;
+            } else {
+                execute!(terminal.backend_mut(), event::DisableMouseCapture)?;
+            }
+            mouse_captured = app.mouse_enabled;
+        }
         if app.needs_clear {
             terminal.clear()?;
             app.needs_clear = false;
@@ -225,36 +275,7 @@ fn run_app(
                     app.handle_paste(text);
                 }
                 Event::Mouse(m) => {
-                    let left_width = terminal.size()?.width * 22 / 100;
-                    let is_left_panel = m.column < left_width;
-                    match m.kind {
-                        crossterm::event::MouseEventKind::ScrollDown => {
-                            if app.show_help {
-                                app.help_scroll = app.help_scroll.saturating_add(1);
-                            } else {
-                                app.move_sel(1);
-                            }
-                        }
-                        crossterm::event::MouseEventKind::ScrollUp => {
-                            if app.show_help {
-                                app.help_scroll = app.help_scroll.saturating_sub(1);
-                            } else {
-                                app.move_sel(-1);
-                            }
-                        }
-                        crossterm::event::MouseEventKind::Down(
-                            crossterm::event::MouseButton::Left,
-                        ) => {
-                            if m.column > terminal.size()?.width / 2 {
-                                app.pane = Pane::Right;
-                            } else if is_left_panel {
-                                app.pane = Pane::Left;
-                            } else {
-                                app.pane = Pane::Center;
-                            }
-                        }
-                        _ => {}
-                    }
+                    app.handle_mouse(m)?;
                 }
                 _ => {}
             }
@@ -266,5 +287,7 @@ fn run_app(
     Ok(())
 }
 
+#[cfg(test)]
+mod mouse_tests;
 #[cfg(test)]
 mod tests;

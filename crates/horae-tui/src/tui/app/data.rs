@@ -368,6 +368,8 @@ impl<'a> App<'a> {
 
     pub(crate) fn load_detail(&mut self) {
         self.detail = None;
+        // 详情换了任务/刷新后回到顶部，避免沿用上一个任务的滚动位置。
+        self.detail_scroll = 0;
         if matches!(self.view, View::Tags | View::Settings | View::Workflow) {
             return;
         }
